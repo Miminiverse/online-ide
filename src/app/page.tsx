@@ -1,103 +1,126 @@
-import Image from "next/image";
+"use client";
+import React, { useEffect, useState } from "react";
+import CodeEditor from "../app/components/Editor";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [code, setCode] = useState<string>("// Write your code here");
+  const [language, setLanguage] = useState<string>("python");
+  const [output, setOutput] = useState<string>("");
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    console.log("Code changed:", code);
+  }, [code]);
+
+  const handleCodeChange = (value: string | undefined) => {
+    if (value) {
+      setCode(value);
+    }
+  };
+
+  const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setLanguage(event.target.value);
+  };
+
+  interface ApiResponse {
+    output?: string;
+    error?: string;
+  }
+
+  const handleRun = async () => {
+    setIsRunning(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://localhost:8010/api/execute", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code, language }),
+      });
+
+      const data: ApiResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to execute code");
+      }
+
+      setOutput(data.output || "Code executed successfully, but no output was returned.");
+    } catch (err) {
+      setError((err as Error).message);
+      setOutput(`Error: ${(err as Error).message}`);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const handleDebug = () => {
+    alert(`Debug button clicked!\nCode:\n${code}`);
+  };
+
+  return (
+    <div style={{ display: "flex", height: "100vh" }}>
+      {/* Left Sidebar */}
+      <div style={{ width: "200px", backgroundColor: "#2d2d2d", padding: "20px", color: "#ffffff" }}>
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {["IDE", "My projects", "Course", "Game", "Quiz", "Materials", "Login/Signup"].map((item) => (
+            <li key={item} style={{ margin: "10px 0" }}>
+              <button style={{ background: "none", border: "none", color: "#ffffff", cursor: "pointer" }}>
+                {item}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Main Content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {/* Top Bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", backgroundColor: "#1e1e1e" }}>
+          <div>
+            <button
+              onClick={handleRun}
+              disabled={isRunning}
+              style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: isRunning ? "not-allowed" : "pointer", opacity: isRunning ? 0.7 : 1 }}
+            >
+              {isRunning ? "Running..." : "Run"}
+            </button>
+            <button
+              onClick={handleDebug}
+              style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              Debug
+            </button>
+            {["Share", "Submit to Canvas"].map((text) => (
+              <button key={text} style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+                {text}
+              </button>
+            ))}
+          </div>
+
+          {/* Language Dropdown */}
+          <select value={language} onChange={handleLanguageChange} style={{ padding: "5px", backgroundColor: "#333", color: "#ffffff", border: "none", borderRadius: "4px" }}>
+            {["c++", "c", "python", "java", "html", "css"].map((lang) => (
+              <option key={lang} value={lang}>
+                {lang.toUpperCase()}
+              </option>
+            ))}
+          </select>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* Monaco Editor */}
+        <CodeEditor code={code} onChange={handleCodeChange} language={language} />
+
+        {/* Output Section */}
+        <div style={{ margin: "20px" }}>
+          <h2>Output</h2>
+          <pre style={{ backgroundColor: "#2d2d2d", padding: "10px", color: error ? "#ff6b6b" : "#ffffff", maxHeight: "200px", overflow: "auto", borderRadius: "4px" }}>
+            {output || "Run your code to see output here"}
+          </pre>
+        </div>
+      </div>
     </div>
   );
 }
