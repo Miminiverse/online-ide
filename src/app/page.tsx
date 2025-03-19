@@ -1,6 +1,8 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import CodeEditor from "../app/components/Editor";
+import programmingLanguages from "@/constants/programmingLanguage";
+import endpoints from "@/constants/endpoints";
 
 export default function Home() {
   const [code, setCode] = useState<string>("// Write your code here");
@@ -33,7 +35,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch("http://localhost:8010/api/execute", {
+      const response = await fetch(endpoints.server, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -93,18 +95,19 @@ export default function Home() {
             >
               Debug
             </button>
-            {["Share", "Submit to Canvas"].map((text) => (
-              <button key={text} style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: "pointer" }}>
-                {text}
-              </button>
-            ))}
+            <button
+              // onClick={handleDebug}
+              style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              Share
+            </button>
           </div>
 
           {/* Language Dropdown */}
           <select value={language} onChange={handleLanguageChange} style={{ padding: "5px", backgroundColor: "#333", color: "#ffffff", border: "none", borderRadius: "4px" }}>
-            {["c++", "c", "python", "java", "html", "css"].map((lang) => (
+            {programmingLanguages.map((lang) => (
               <option key={lang} value={lang}>
-                {lang.toUpperCase()}
+                {lang}
               </option>
             ))}
           </select>
