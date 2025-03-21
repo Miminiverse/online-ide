@@ -1,8 +1,7 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import CodeEditor from "../app/components/Editor";
 import programmingLanguages from "@/constants/programmingLanguage";
-import endpoints from "@/constants/endpoints";
 
 export default function Home() {
   const [code, setCode] = useState<string>("// Write your code here");
@@ -10,10 +9,64 @@ export default function Home() {
   const [output, setOutput] = useState<string>("");
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [ws, setWs] = useState<WebSocket | null>(null);
+  const [isWaitingForInput, setIsWaitingForInput] = useState<boolean>(false);
+  const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    console.log("Code changed:", code);
-  }, [code]);
+    let websocket: WebSocket;
+    let reconnectAttempts = 0;
+
+    const connect = () => {
+      websocket = new WebSocket('ws://localhost:8010');
+      setWs(websocket);
+
+      websocket.onmessage = (event) => {
+        const { type, data, error } = JSON.parse(event.data);
+
+        if (type === 'output') {
+          console.log('data',data);
+          
+          setOutput((prevOutput) => prevOutput + data);
+          if (data.includes("Enter input:")) { // Example: Detect when the program is waiting for input
+            setIsWaitingForInput(true);
+          }
+        } else if (type === 'exit') {
+          setIsRunning(false);
+          setIsWaitingForInput(false);
+        } else if (type === 'error') {
+          setError(error);
+          setIsRunning(false);
+          setIsWaitingForInput(false);
+        }
+      };
+
+      websocket.onclose = () => {
+        console.log("WebSocket connection closed. Reconnecting...");
+        setTimeout(() => {
+          if (reconnectAttempts < 5) {
+            reconnectAttempts++;
+            connect();
+          }
+        }, 3000); // Reconnect after 3 seconds
+      };
+    };
+
+    connect();
+
+    return () => {
+      if (websocket) {
+        websocket.close();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Scroll to the bottom of the output whenever it updates
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
+  }, [output]);
 
   const handleCodeChange = (value: string | undefined) => {
     if (value) {
@@ -25,36 +78,23 @@ export default function Home() {
     setLanguage(event.target.value);
   };
 
-  interface ApiResponse {
-    output?: string;
-    error?: string;
-  }
-
   const handleRun = async () => {
     setIsRunning(true);
     setError(null);
+    setOutput("");
 
-    try {
-      const response = await fetch(endpoints.server, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code, language }),
-      });
+    if (ws) {
+      ws.send(JSON.stringify({ type: "execute", code, language }));
+    }
+  };
 
-      const data: ApiResponse = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to execute code");
-      }
-
-      setOutput(data.output || "Code executed successfully, but no output was returned.");
-    } catch (err) {
-      setError((err as Error).message);
-      setOutput(`Error: ${(err as Error).message}`);
-    } finally {
-      setIsRunning(false);
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && isWaitingForInput && ws) {
+      const input = event.currentTarget.value;
+      ws.send(JSON.stringify({ type: "input", data: input }));
+      setOutput((prevOutput) => prevOutput + `\n${input}`); // Append the input to the output
+      event.currentTarget.value = ""; // Clear the input field
+      setIsWaitingForInput(false); // Reset the input waiting state
     }
   };
 
@@ -116,12 +156,23 @@ export default function Home() {
         {/* Monaco Editor */}
         <CodeEditor code={code} onChange={handleCodeChange} language={language} />
 
-        {/* Output Section */}
+        {/* Combined Input/Output Section */}
         <div style={{ margin: "20px" }}>
           <h2>Output</h2>
-          <pre style={{ backgroundColor: "#2d2d2d", padding: "10px", color: error ? "#ff6b6b" : "#ffffff", maxHeight: "200px", overflow: "auto", borderRadius: "4px" }}>
-            {output || "Run your code to see output here"}
-          </pre>
+          <div
+            ref={outputRef}
+            style={{ backgroundColor: "#2d2d2d", padding: "10px", color: error ? "#ff6b6b" : "#ffffff", maxHeight: "200px", overflow: "auto", borderRadius: "4px" }}
+          >
+            <pre>{output}</pre>
+            {isWaitingForInput && (
+              <input
+                type="text"
+                autoFocus
+                onKeyDown={handleKeyDown}
+                style={{ backgroundColor: "transparent", border: "none", color: "#ffffff", outline: "none" }}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>
