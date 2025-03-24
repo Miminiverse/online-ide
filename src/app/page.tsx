@@ -11,33 +11,55 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [isWaitingForInput, setIsWaitingForInput] = useState<boolean>(false);
+  const [inputPrompt, setInputPrompt] = useState<string>("");
   const outputRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let websocket: WebSocket;
     let reconnectAttempts = 0;
 
     const connect = () => {
-      websocket = new WebSocket('ws://localhost:8010');
+      websocket = new WebSocket("ws://localhost:8010");
       setWs(websocket);
 
       websocket.onmessage = (event) => {
-        const { type, data, error } = JSON.parse(event.data);
+        const message = JSON.parse(event.data);
+        console.log("Received message:", message);
 
-        if (type === 'output') {
-          console.log('data',data);
-          
-          setOutput((prevOutput) => prevOutput + data);
-          if (data.includes("Enter input:")) { // Example: Detect when the program is waiting for input
+        switch (message.type) {
+          case "output":
+            setOutput((prevOutput) => prevOutput + message.data + "\n");
+            break;
+            
+          case "inputRequired":
+            // New message type from backend that indicates input is needed
             setIsWaitingForInput(true);
-          }
-        } else if (type === 'exit') {
-          setIsRunning(false);
-          setIsWaitingForInput(false);
-        } else if (type === 'error') {
-          setError(error);
-          setIsRunning(false);
-          setIsWaitingForInput(false);
+            setInputPrompt(message.prompt);
+            // Focus the input field when it appears
+            setTimeout(() => {
+              if (inputRef.current) {
+                inputRef.current.focus();
+              }
+            }, 0);
+            break;
+            
+          case "status":
+            if (message.status === "finished") {
+              setIsRunning(false);
+              setIsWaitingForInput(false);
+            }
+            break;
+            
+          case "error":
+            setError(message.error);
+            setIsRunning(false);
+            setIsWaitingForInput(false);
+            setOutput((prevOutput) => prevOutput + `Error: ${message.error}\n`);
+            break;
+            
+          default:
+            console.log("Unknown message type:", message.type);
         }
       };
 
@@ -49,6 +71,11 @@ export default function Home() {
             connect();
           }
         }, 3000); // Reconnect after 3 seconds
+      };
+      
+      websocket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setError("WebSocket connection error. Please try again.");
       };
     };
 
@@ -74,7 +101,9 @@ export default function Home() {
     }
   };
 
-  const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleLanguageChange = (
+    event: React.ChangeEvent<HTMLSelectElement>
+  ) => {
     setLanguage(event.target.value);
   };
 
@@ -82,19 +111,39 @@ export default function Home() {
     setIsRunning(true);
     setError(null);
     setOutput("");
+    setIsWaitingForInput(false);
 
-    if (ws) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "execute", code, language }));
+    } else {
+      setError("WebSocket not connected. Please refresh the page.");
+      setIsRunning(false);
+    }
+  };
+
+  const handleInputSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    
+    if (inputRef.current && ws && isWaitingForInput) {
+      const inputValue = inputRef.current.value;
+      // Send the input to the server
+      ws.send(JSON.stringify({ type: "input", data: inputValue }));
+      
+      // Add the input to the output display for the user to see
+      setOutput((prevOutput) => prevOutput + `${inputValue}\n`);
+      
+      // Clear the input field
+      inputRef.current.value = "";
+      
+      // Reset waiting state (backend will send another inputRequired if needed)
+      setIsWaitingForInput(false);
     }
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter" && isWaitingForInput && ws) {
-      const input = event.currentTarget.value;
-      ws.send(JSON.stringify({ type: "input", data: input }));
-      setOutput((prevOutput) => prevOutput + `\n${input}`); // Append the input to the output
-      event.currentTarget.value = ""; // Clear the input field
-      setIsWaitingForInput(false); // Reset the input waiting state
+    if (event.key === "Enter") {
+      // The form's onSubmit handler will take care of this
+      event.preventDefault();
     }
   };
 
@@ -105,11 +154,33 @@ export default function Home() {
   return (
     <div style={{ display: "flex", height: "100vh" }}>
       {/* Left Sidebar */}
-      <div style={{ width: "200px", backgroundColor: "#2d2d2d", padding: "20px", color: "#ffffff" }}>
+      <div
+        style={{
+          width: "200px",
+          backgroundColor: "#2d2d2d",
+          padding: "20px",
+          color: "#ffffff",
+        }}
+      >
         <ul style={{ listStyle: "none", padding: 0 }}>
-          {["IDE", "My projects", "Course", "Game", "Quiz", "Materials", "Login/Signup"].map((item) => (
+          {[
+            "IDE",
+            "My projects",
+            "Course",
+            "Game",
+            "Quiz",
+            "Materials",
+            "Login/Signup",
+          ].map((item) => (
             <li key={item} style={{ margin: "10px 0" }}>
-              <button style={{ background: "none", border: "none", color: "#ffffff", cursor: "pointer" }}>
+              <button
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                }}
+              >
                 {item}
               </button>
             </li>
@@ -120,31 +191,73 @@ export default function Home() {
       {/* Main Content */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Top Bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", backgroundColor: "#1e1e1e" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "10px",
+            backgroundColor: "#1e1e1e",
+          }}
+        >
           <div>
             <button
               onClick={handleRun}
               disabled={isRunning}
-              style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: isRunning ? "not-allowed" : "pointer", opacity: isRunning ? 0.7 : 1 }}
+              style={{
+                padding: "8px 16px",
+                marginRight: "10px",
+                backgroundColor: "#ffffff",
+                color: "#000000",
+                border: "none",
+                borderRadius: "4px",
+                cursor: isRunning ? "not-allowed" : "pointer",
+                opacity: isRunning ? 0.7 : 1,
+              }}
             >
               {isRunning ? "Running..." : "Run"}
             </button>
             <button
               onClick={handleDebug}
-              style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: "pointer" }}
+              style={{
+                padding: "8px 16px",
+                marginRight: "10px",
+                backgroundColor: "#ffffff",
+                color: "#000000",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
             >
               Debug
             </button>
             <button
-              // onClick={handleDebug}
-              style={{ padding: "8px 16px", marginRight: "10px", backgroundColor: "#ffffff", color: "#000000", border: "none", borderRadius: "4px", cursor: "pointer" }}
+              style={{
+                padding: "8px 16px",
+                marginRight: "10px",
+                backgroundColor: "#ffffff",
+                color: "#000000",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}
             >
               Share
             </button>
           </div>
 
           {/* Language Dropdown */}
-          <select value={language} onChange={handleLanguageChange} style={{ padding: "5px", backgroundColor: "#333", color: "#ffffff", border: "none", borderRadius: "4px" }}>
+          <select
+            value={language}
+            onChange={handleLanguageChange}
+            style={{
+              padding: "5px",
+              backgroundColor: "#333",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "4px",
+            }}
+          >
             {programmingLanguages.map((lang) => (
               <option key={lang} value={lang}>
                 {lang}
@@ -154,25 +267,83 @@ export default function Home() {
         </div>
 
         {/* Monaco Editor */}
-        <CodeEditor code={code} onChange={handleCodeChange} language={language} />
+        <CodeEditor
+          code={code}
+          onChange={handleCodeChange}
+          language={language}
+        />
 
-        {/* Combined Input/Output Section */}
+        {/* Output Section */}
         <div style={{ margin: "20px" }}>
           <h2>Output</h2>
           <div
             ref={outputRef}
-            style={{ backgroundColor: "#2d2d2d", padding: "10px", color: error ? "#ff6b6b" : "#ffffff", maxHeight: "200px", overflow: "auto", borderRadius: "4px" }}
+            style={{
+              backgroundColor: "#2d2d2d",
+              padding: "10px",
+              color: error ? "#ff6b6b" : "#ffffff",
+              minHeight: "150px",
+              maxHeight: "200px",
+              overflow: "auto",
+              borderRadius: "4px",
+              fontFamily: "monospace",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
           >
             <pre>{output}</pre>
-            {isWaitingForInput && (
-              <input
-                type="text"
-                autoFocus
-                onKeyDown={handleKeyDown}
-                style={{ backgroundColor: "transparent", border: "none", color: "#ffffff", outline: "none" }}
-              />
-            )}
           </div>
+          
+          {/* Input Section - Only shown when waiting for input */}
+          {isWaitingForInput && (
+            <form 
+              onSubmit={handleInputSubmit}
+              style={{ 
+                marginTop: "10px", 
+                display: "flex",
+                alignItems: "center" 
+              }}
+            >
+              <label
+                style={{
+                  color: "#ffffff",
+                  marginRight: "10px",
+                  fontFamily: "monospace"
+                }}
+              >
+                Input:
+              </label>
+              <input
+                ref={inputRef}
+                type="text"
+                onKeyDown={handleKeyDown}
+                autoFocus
+                style={{
+                  backgroundColor: "#3d3d3d",
+                  border: "1px solid #555",
+                  color: "#ffffff",
+                  padding: "8px 12px",
+                  borderRadius: "4px",
+                  flex: 1,
+                  fontFamily: "monospace"
+                }}
+              />
+              <button
+                type="submit"
+                style={{
+                  padding: "8px 16px",
+                  marginLeft: "10px",
+                  backgroundColor: "#4CAF50",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                Submit
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
