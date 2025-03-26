@@ -12,6 +12,7 @@ export default function Home() {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [isWaitingForInput, setIsWaitingForInput] = useState<boolean>(false);
   const [inputPrompt, setInputPrompt] = useState<string>("");
+  const [terminalInput, setTerminalInput] = useState<string>("");
   const outputRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -31,7 +32,7 @@ export default function Home() {
           case "output":
             setOutput((prevOutput) => prevOutput + message.data + "\n");
             break;
-            
+
           case "inputRequired":
             // New message type from backend that indicates input is needed
             setIsWaitingForInput(true);
@@ -43,21 +44,21 @@ export default function Home() {
               }
             }, 0);
             break;
-            
+
           case "status":
             if (message.status === "finished") {
               setIsRunning(false);
               setIsWaitingForInput(false);
             }
             break;
-            
+
           case "error":
             setError(message.error);
             setIsRunning(false);
             setIsWaitingForInput(false);
             setOutput((prevOutput) => prevOutput + `Error: ${message.error}\n`);
             break;
-            
+
           default:
             console.log("Unknown message type:", message.type);
         }
@@ -72,7 +73,7 @@ export default function Home() {
           }
         }, 3000); // Reconnect after 3 seconds
       };
-      
+
       websocket.onerror = (error) => {
         console.error("WebSocket error:", error);
         setError("WebSocket connection error. Please try again.");
@@ -123,18 +124,18 @@ export default function Home() {
 
   const handleInputSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    
+
     if (inputRef.current && ws && isWaitingForInput) {
       const inputValue = inputRef.current.value;
       // Send the input to the server
       ws.send(JSON.stringify({ type: "input", data: inputValue }));
-      
+
       // Add the input to the output display for the user to see
       setOutput((prevOutput) => prevOutput + `${inputValue}\n`);
-      
+
       // Clear the input field
       inputRef.current.value = "";
-      
+
       // Reset waiting state (backend will send another inputRequired if needed)
       setIsWaitingForInput(false);
     }
@@ -149,6 +150,27 @@ export default function Home() {
 
   const handleDebug = () => {
     alert(`Debug button clicked!\nCode:\n${code}`);
+  };
+
+  const handleTerminalInput = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isWaitingForInput) return; // Ignore if input isn't required
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      if (ws) {
+        ws.send(JSON.stringify({ type: "input", data: terminalInput }));
+
+        // Append input to output and reset terminalInput
+        setOutput((prevOutput) => prevOutput + terminalInput + "\n");
+        setTerminalInput("");
+        setIsWaitingForInput(false);
+      }
+    } else if (event.key === "Backspace") {
+      setTerminalInput((prev) => prev.slice(0, -1)); // Remove last char
+    } else if (event.key.length === 1) {
+      setTerminalInput((prev) => prev + event.key); // Append typed char
+    }
   };
 
   return (
@@ -278,6 +300,7 @@ export default function Home() {
           <h2>Output</h2>
           <div
             ref={outputRef}
+            tabIndex={0} // Makes div focusable
             style={{
               backgroundColor: "#2d2d2d",
               padding: "10px",
@@ -289,61 +312,17 @@ export default function Home() {
               fontFamily: "monospace",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
+              outline: "none",
+              cursor: "text", // Indicate it's interactive
             }}
+            onClick={() => outputRef.current?.focus()} // Focus on click
+            onKeyDown={(e) => handleTerminalInput(e)}
           >
             <pre>{output}</pre>
+            {isWaitingForInput && (
+              <span style={{ color: "#4CAF50" }}>{terminalInput}▮</span>
+            )}
           </div>
-          
-          {/* Input Section - Only shown when waiting for input */}
-          {isWaitingForInput && (
-            <form 
-              onSubmit={handleInputSubmit}
-              style={{ 
-                marginTop: "10px", 
-                display: "flex",
-                alignItems: "center" 
-              }}
-            >
-              <label
-                style={{
-                  color: "#ffffff",
-                  marginRight: "10px",
-                  fontFamily: "monospace"
-                }}
-              >
-                Input:
-              </label>
-              <input
-                ref={inputRef}
-                type="text"
-                onKeyDown={handleKeyDown}
-                autoFocus
-                style={{
-                  backgroundColor: "#3d3d3d",
-                  border: "1px solid #555",
-                  color: "#ffffff",
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  flex: 1,
-                  fontFamily: "monospace"
-                }}
-              />
-              <button
-                type="submit"
-                style={{
-                  padding: "8px 16px",
-                  marginLeft: "10px",
-                  backgroundColor: "#4CAF50",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                }}
-              >
-                Submit
-              </button>
-            </form>
-          )}
         </div>
       </div>
     </div>
