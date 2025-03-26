@@ -122,54 +122,29 @@ export default function Home() {
     }
   };
 
-  const handleInputSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (inputRef.current && ws && isWaitingForInput) {
-      const inputValue = inputRef.current.value;
-      // Send the input to the server
-      ws.send(JSON.stringify({ type: "input", data: inputValue }));
-
-      // Add the input to the output display for the user to see
-      setOutput((prevOutput) => prevOutput + `${inputValue}\n`);
-
-      // Clear the input field
-      inputRef.current.value = "";
-
-      // Reset waiting state (backend will send another inputRequired if needed)
-      setIsWaitingForInput(false);
-    }
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      // The form's onSubmit handler will take care of this
-      event.preventDefault();
-    }
-  };
 
   const handleDebug = () => {
     alert(`Debug button clicked!\nCode:\n${code}`);
   };
 
   const handleTerminalInput = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!isWaitingForInput) return; // Ignore if input isn't required
-
+    if (!isWaitingForInput) return; // Ignore if no input is needed
+  
     if (event.key === "Enter") {
       event.preventDefault();
-
+  
       if (ws) {
         ws.send(JSON.stringify({ type: "input", data: terminalInput }));
-
-        // Append input to output and reset terminalInput
-        setOutput((prevOutput) => prevOutput + terminalInput + "\n");
+  
+        // Append only the result, not the input itself
+        setOutput((prevOutput) => prevOutput.trimEnd() + "\n"); // Ensure no extra input display
         setTerminalInput("");
         setIsWaitingForInput(false);
       }
     } else if (event.key === "Backspace") {
-      setTerminalInput((prev) => prev.slice(0, -1)); // Remove last char
+      setTerminalInput((prev) => prev.slice(0, -1));
     } else if (event.key.length === 1) {
-      setTerminalInput((prev) => prev + event.key); // Append typed char
+      setTerminalInput((prev) => prev + event.key);
     }
   };
 
