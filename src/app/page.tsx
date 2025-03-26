@@ -5,7 +5,7 @@ import programmingLanguages from "@/constants/programmingLanguage";
 
 export default function Home() {
   const [code, setCode] = useState<string>("// Write your code here");
-  const [language, setLanguage] = useState<string>("python");
+  const [language, setLanguage] = useState<string>("c++");
   const [output, setOutput] = useState<string>("");
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,13 +129,13 @@ export default function Home() {
 
   const handleTerminalInput = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!isWaitingForInput) return; // Ignore if no input is needed
-  
+
     if (event.key === "Enter") {
       event.preventDefault();
-  
+
       if (ws) {
         ws.send(JSON.stringify({ type: "input", data: terminalInput }));
-  
+
         // Append only the result, not the input itself
         setOutput((prevOutput) => prevOutput.trimEnd() + "\n"); // Ensure no extra input display
         setTerminalInput("");
