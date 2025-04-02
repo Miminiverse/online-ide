@@ -1,6 +1,7 @@
 "use client";
 import React, { useRef } from "react";
 import Editor, { Monaco, OnMount } from "@monaco-editor/react";
+import getMonacoLanguage from "@/utils/getMonacoLanguage";
 
 interface EditorProps {
   code: string;
@@ -8,18 +9,20 @@ interface EditorProps {
   language?: string; // Optional language prop
 }
 
-const CodeEditor: React.FC<EditorProps> = ({ code, onChange, language = "javascript" }) => {
+const CodeEditor: React.FC<EditorProps> = ({ code, onChange, language = "python" }) => {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
   };
 
+  const monacoLanguage = getMonacoLanguage(language);
+
   return (
     <Editor
       height="90vh"
-      language={language} // Dynamically set language
-      value={code} // Use `value` instead of `defaultValue` to stay reactive
+      language={monacoLanguage}
+      value={code}
       onChange={onChange}
       onMount={handleEditorDidMount}
       theme="vs-dark"
